@@ -233,15 +233,6 @@ axisPhylo(side = 1, root.time = root_height, backward = F)
 plot(dataset_with_nodes$time, 
      dataset_with_nodes$index, 
      col = adjustcolor(dataset_with_nodes$group_color, alpha.f = 1),
-     bty = 'n', xlim = c(2019.95, 2020.4), cex = 0.5,
-     pch = 16, bty = 'n', ylim = c(0.4, 1), 
-     main = paste0(''), 
-     ylab = 'Diversity index', xlab = 'Time (years)', yaxt = 'n')
-axis(2, las = 2)
-
-plot(dataset_with_nodes$time, 
-     dataset_with_nodes$index, 
-     col = adjustcolor(dataset_with_nodes$group_color, alpha.f = 1),
      bty = 'n', xlim = c(2019.95, 2022.7), cex = 0.5,
      pch = 16, bty = 'n', ylim = c(0, 1), 
      main = paste0(''), 
