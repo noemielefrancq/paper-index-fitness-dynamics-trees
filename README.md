@@ -29,10 +29,10 @@ January 2 2024
 In the repo you will find:
 
 1.  In `1_Data`, the data used in the paper.
-2.  In `2_Codes`, the codes that are behind the analysis:
-    - fitness dynamics
+2.  In `2_Functions`, the codes that are behind the analysis:
+    - fitness index dynamics
     - lineages detection
-    - lineage fitness
+    - lineage fitness estimation
     - lineage-defining mutations
 3.  In `3_Analysis_per_pathogen`, the analysis per pathogen
 
