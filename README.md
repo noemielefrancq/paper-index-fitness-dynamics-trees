@@ -2,6 +2,8 @@ Code for the paper ‘Learning the fitness dynamics of pathogens from
 phylogenies’
 ================
 
+Last update: 3 January 2024
+
 # Content of this repo
 
 In this repo you will find:
@@ -10,9 +12,10 @@ In this repo you will find:
 2.  In `2_Functions`, the codes that are behind the analysis:
     - fitness index dynamics
     - lineages detection
-    - lineage fitness estimation
-    - lineage-defining mutations
-3.  In `3_Analysis_per_pathogen`, the analysis for each pathogen
+    - lineage fitness estimation (will be updated soon)
+    - lineage-defining mutations (will be updated soon)
+3.  In `3_Analysis_per_pathogen`, the analysis for each pathogen (will
+    be updated soon)
 
 *Below is a brief example of what can be archived on SARS-CoV-2, using
 the codes in the folder `2_Codes`.*
@@ -35,9 +38,9 @@ source(file = '2_Functions/2_4_Lineage_defining_mutations.R')
 Load necessary packages
 
 ``` r
-library(ape, quiet = T); library(phytools, quiet = T); library(stringr, quiet = T); library(MetBrewer, quiet = T); library(parallel, quiet = T); library(mgcv, quiet = T)
-library(cowplot, quiet = T); library(ggplot2, quiet = T)
-library(ggtree, quiet = T)
+library(ape, quiet = T); library(phytools, quiet = T); library(stringr, quiet = T)
+library(MetBrewer, quiet = T); library(parallel, quiet = T); library(mgcv, quiet = T)
+library(cowplot, quiet = T); library(ggplot2, quiet = T); library(ggtree, quiet = T)
 ```
 
 #### Load data
