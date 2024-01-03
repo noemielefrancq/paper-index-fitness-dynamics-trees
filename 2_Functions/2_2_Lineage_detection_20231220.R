@@ -52,7 +52,6 @@ test.nested.groups = function(tree, root_groups, metadata){
   nested_dataframe = nested_dataframe[!duplicated(nested_dataframe), ]
   return(nested_dataframe)
 }
-
 update.root.groups = function(tree, root_groups, nroot, parent, descendant){
   other_roots=root_groups[-which(root_groups==parent)]
   #get a new ancestral group root : sister node of the descendent one
@@ -69,7 +68,6 @@ update.root.groups = function(tree, root_groups, nroot, parent, descendant){
   root_groups=root_groups[!duplicated(root_groups)]
   return(root_groups)
 }
-
 compute.root.structural.groups=function(tree, metadata, genetic_distance_mat, nroot, nodes_height){
   mds=cmdscale(genetic_distance_mat)
   mds=mds[-nroot,] # remove root of the tree
@@ -113,246 +111,7 @@ compute.root.structural.groups=function(tree, metadata, genetic_distance_mat, nr
   return(root_groups)
 }
 
-test.node.for.split = function(timed_tree, time_distance_mat, metadata, time_window, node, 
-                               min_number_clade, p_value_threshold, error_threshold,
-                               mutation_rate, genome_length, index_window, timescale){
-  
-  ## Subset dataset from node of interest
-  metadata_subtree = metadata[c(node, getDescendants(timed_tree, node)),]
-  
-  ## Extract only nodes & tips that are in the time window = X years after the last group MRCA
-  metadata_subtree = metadata_subtree[which(metadata_subtree$time <= min(metadata_subtree$time)+time_window),]
-  H_subtree = time_distance_mat[metadata_subtree$ID, metadata_subtree$ID]
-  
-  if(length(dim(H_subtree)) == 2 & length(which(metadata_subtree$is.node == 'yes')) > 2){
-    ## Compute index, on this new subset of the distance matrix
-    metadata_subtree$index = compute.index(H_subtree, timed_tree, time_window, metadata_subtree, mutation_rate, timescale, genome_length)
-    
-    ## Compute cumulative index
-    index_tmp = time_tmp = numeric(max(timed_tree$edge))
-    index_tmp[metadata_subtree$ID] = metadata_subtree$index
-    time_tmp[metadata_subtree$ID] = metadata_subtree$time
-    index_tmp = cumulative.index.all.nodes(timed_tree, index_tmp, time_tmp)
-    metadata_subtree$index = index_tmp[metadata_subtree$ID]
-    metadata_subtree = metadata_subtree[which(!is.na(metadata_subtree$index)),]
-    metadata_subtree_rownames = rownames(metadata_subtree)
-    
-    ## Change time reference: ref=time of mrca
-    metadata_subtree$time_from_beginning = metadata_subtree$time - min(metadata_subtree$time, na.rm = T)
-    
-    ## Get the list of nodes to test
-    nodes_to_test = metadata_subtree_rownames[which(metadata_subtree$is.node == 'yes' & 
-                                                      metadata_subtree$time_from_beginning <= time_window)]
-    ## Order that list by increasing time
-    nodes_to_test = nodes_to_test[order(metadata_subtree$time[which(metadata_subtree$is.node == 'yes' & 
-                                                                      metadata_subtree$time_from_beginning <= time_window)])]
-    
-    ## Null hypothesis: no split
-    mod_null = lm(index ~ log(time_from_beginning+1), data = metadata_subtree)
-    s_null = summary(mod_null)
-    
-    ## Compute fit error and AIC
-    error_null = sqrt(sum(s_null$residuals^2)/sum(s_null$df))
-    AIC_null = AIC(mod_null)
-    
-    ## Set matrices to store results
-    errors = rep(NA, length(nodes_to_test))
-    AICs = rep(NA, length(nodes_to_test))
-    summaries = as.list(rep(NA, length(nodes_to_test)))
-    
-    ## For each node to test:
-    for(i in 1:length(nodes_to_test)){
-      ## Extract clade of interest
-      sub = c(nodes_to_test[i], getDescendants(timed_tree, nodes_to_test[i]))
-      sub = sub[which(is.na(match(as.character(sub), metadata_subtree_rownames)) == F)]
-      l_sub = length(sub)
-      
-      ## If each clade contains min_number_clade tips and nodes, go ahead
-      if(l_sub >= min_number_clade & nrow(metadata_subtree)-l_sub >= min_number_clade){
-        m = match(metadata_subtree_rownames, as.character(sub))        
-        clade_membership = rep(NA, nrow(metadata_subtree))
-        clade_membership[which(is.na(m) == T)] = 0
-        clade_membership[which(is.na(m) == F)] = 1
-        clade_membership[which(metadata_subtree_rownames == getParent(timed_tree, nodes_to_test[i]))] = -1
-        
-        clade_data = data.frame('background' = clade_membership,
-                                'clade_membership' = 1-clade_membership)
-        tmp_0 = which(clade_membership <= 0)
-        tmp_1 = which(clade_membership == 1)
-        tmp_m1 = which(clade_membership == -1)
-        clade_data$background[tmp_0] = log(metadata_subtree$time_from_beginning[tmp_0]+1)
-        clade_data$background[tmp_1] = log(metadata_subtree$time_from_beginning[tmp_m1]+1)
-        clade_data$clade_membership[tmp_0] = 0
-        clade_data$clade_membership[tmp_1] = log(metadata_subtree$time_from_beginning[tmp_1]-metadata_subtree$time_from_beginning[tmp_m1]+1)
-        
-        ## Linear model for slope
-        mod = lm(metadata_subtree$index ~ clade_data$background + clade_data$clade_membership)
-        s = summary(mod)
-        
-        ## Fill in results
-        errors[i] = sqrt(sum(s$residuals^2)/sum(s$df))
-        AICs[i] = AIC(mod)
-        summaries[[i]] = s
-      }
-    } 
-    
-    ## Compute difference of errors and AICs, compared to the null hypothesis
-    errors_diff = errors-error_null
-    AICs_diff = AICs - AIC_null
-    
-    ## Get intercept p-values
-    conf = unlist(lapply(summaries, function(x){
-      if(all(is.na(x) == F)){
-        if(dim(coef(x))[1] > 2) return(coef(x)[3,4])
-        else return(NA) 
-      } else return(NA) 
-    }))
-    
-    ## If p-value < threshold, keep error
-    errors[which(conf > p_value_threshold)] = NA
-    errors_diff[which(conf > p_value_threshold)] = NA
-    AICs[which(conf > p_value_threshold)] = NA
-    
-    ## Find best splits, and next-to-best splits
-    if(length(which(errors_diff < 0)) > 0){
-      id = which((errors_diff < 0) & errors_diff < min(errors_diff, na.rm = T) + abs(min(errors_diff, na.rm = T)*error_threshold))
-      
-      ## Find parents of your split ndoes
-      parents = timed_tree$edge[match(as.numeric(nodes_to_test[id]), timed_tree$edge[,2]),1]
-      
-      ## Keep only the nodes that parent of each node, if any
-      nodes_not_parents = as.numeric(nodes_to_test[id])[which(is.na(match(parents, as.numeric(nodes_to_test[id]))))]
-      index_to_remove = NULL
-      
-      ## Make sure to only output non-overlapping splits
-      for(i in 1:length(nodes_not_parents)){
-        tmp = match(nodes_not_parents, getDescendants(tree = timed_tree, node = nodes_not_parents[i]))
-        if(length(which(!is.na(tmp))) > 0){
-          index_to_remove = c(index_to_remove, which(!is.na(tmp)))
-        }
-      }
-      if(!is.null(index_to_remove)){
-        nodes_not_parents = nodes_not_parents[-index_to_remove]
-      }
-      return(list('potential_split' =  nodes_not_parents,
-                  'diff_error' = errors[match(nodes_not_parents, nodes_to_test)],
-                  'diff_AIC' = AICs[match(nodes_not_parents, nodes_to_test)],
-                  'summary_fit' = summaries[match(nodes_not_parents, nodes_to_test)]))
-    }else{ ## If there is no significant slopes: no split
-      return('no split')
-    }
-    
-  }else{ ## If there is no node to test: no split
-    return('no split')
-  }
-}
-
-#' Find groups defined by index dynamics 1.0: PARAMETRIC test
-#'
-#' @importFrom stats lm
-#' @importFrom phytools getDescendants getParent
-#' @param timed_tree Timed tree
-#' @param time_distance_mat Hamming distance matrix
-#' @param metadata Metadata dataframe
-#' @param mutation_rate Mutation rate
-#' @param genome_length Genome length
-#' @param min_offspring_per_start_nodes To start the analysis, start from nodes that have this minimum number of sequences
-#' @param time_window Rolling time window
-#' @param min_number_clade Minimum number of sequences per split to test
-#' @param p_value_threshold p value to call a potential split
-#' @param error_threshold Error threshold
-#' @return Groups
-#' @export
-find.groups.by.index.dynamics.1.0 = function(timed_tree, 
-                                         time_distance_mat, 
-                                         metadata, 
-                                         mutation_rate, 
-                                         genome_length, 
-                                         timescale,
-                                         min_offspring_per_start_nodes = 50,
-                                         time_window = 20, 
-                                         min_number_clade = 10, 
-                                         p_value_threshold = 0.01, 
-                                         error_threshold = 0.1,
-                                         show_progress = F){
-  
-  ## Number tips, and list of nodes
-  n_tips = timed_tree$Nnode + 1
-  list_nodes = (1:(n_tips-1)) + n_tips
-  
-  ## Find nodes that have enough offspring to start
-  start_nodes = which(number.descendants.all.nodes(timed_tree)[list_nodes]>=min_offspring_per_start_nodes)
-  
-  ## Set lists to store results
-  potential_splits = NULL
-  
-  ## For all nodes to test
-  for(s in 1:length(start_nodes)){
-    node_to_check = start_nodes[s]
-    
-    ## Check if this node as been checked previously. If not, go ahead
-    if(is.na(match(node_to_check+n_tips, potential_splits)) == T){
-      
-      split_found = T
-      k = 1
-      
-      ## As long as a split is found, go through the tree
-      while(split_found == T){
-        ## List to store results
-        res_node_to_check = NULL
-        for(n in 1:length(node_to_check)){
-          if(show_progress == T) print(paste0('Testing node ', node_to_check[n]+n_tips))
-          node = node_to_check[n]+n_tips
-          
-          ## Check this node splits
-          node_split_values = test.node.for.split(timed_tree,
-                                                   time_distance_mat,
-                                                   metadata, 
-                                                   time_window, 
-                                                   node, 
-                                                   min_number_clade, 
-                                                   p_value_threshold,
-                                                   error_threshold,
-                                                   mutation_rate, 
-                                                   genome_length, 
-                                                   index_window, 
-                                                   timescale)
-          if(length(node_split_values) == 1){
-            res_node_to_check = c(res_node_to_check, F) # No split
-          }else{
-            res_node_to_check = c(res_node_to_check, node_split_values$potential_split)
-          }
-        }
-        res_node_to_check = res_node_to_check[which(res_node_to_check>0)]
-        
-        ## Sort results
-        if(all(res_node_to_check == F)){ split_found = F ## If no split
-        }else if(all(is.na(match(res_node_to_check, potential_splits)) == F)){
-          split_found = F ## If split, but split node has already been tested
-        }else {
-          node_to_check = match(res_node_to_check, list_nodes) 
-          node_to_check = node_to_check[which(is.na(node_to_check) == F)]
-          node_to_check = node_to_check[which(is.na(match(node_to_check+n_tips, potential_splits)))]
-          potential_splits = c(potential_splits, res_node_to_check)
-        }
-        k = k+1
-        if(k > 10000) { ## To avoid having endless loop
-          stop("Endless while loop, something went wrong")
-        }
-      }
-    }
-  }
-  return(potential_splits)
-}
-
-#' Merge groups
-#' @param timed_tree Hamming distance matrix
-#' @param metadata presence/absence matrix
-#' @param initial_splits potential splits found previously
-#' @param group_count_threshold Minimum number of sequences per group
-#' @param group_freq_threshold Minimum frequency of group, at least once in the time series
-#' @return Groups
-#' @export
+# Merge groups, if necessary, and compute lineage tree
 merge.groups = function(timed_tree, metadata, structural_splits = NULL, initial_splits, group_count_threshold, group_freq_threshold){
   groups = numeric(nrow(metadata))
   metadata_tmp = metadata
@@ -547,7 +306,7 @@ merge.groups = function(timed_tree, metadata, structural_splits = NULL, initial_
               'tip_and_nodes_groups' = states))
 }
 
-#' Sub function to run the generalised additive model (gam)
+# Sub function to run the generalised additive model (gam)
 run_gam_model = function(metadata_sub, clade_data, weights_sub, k_smooth, coefs, sp){
   ## Set copy of the clade_data to set 'by' in model
   clade_data_group = clade_data
@@ -570,7 +329,7 @@ run_gam_model = function(metadata_sub, clade_data, weights_sub, k_smooth, coefs,
   return(mod)
 }
 
-#' Sub function to test a node
+# Sub function to test a node
 test_node_gam = function(i, metadata_sub, metadata_sub_rownames, 
                          nodes_to_test_tmp, descendants_all_nodes, 
                          min_group_size, clade_membership_recorded, 
@@ -626,383 +385,14 @@ test_node_gam = function(i, metadata_sub, metadata_sub_rownames,
   }
 }
 
-#' Find groups defined by index dynamics 2.0: Non-paramtric test
-#'
-#' This code is fitting a generalised additive model (gam) to the index dynamics, trying to find the smallest number of lineages to explain best the index dynamics.
-#' Model targets are AIC, explained deviance or maximum number of groups
-#' The script is run until a target is met, and the user can choose to record all the different states (keep_track), or not
-#'
-#' @import mgcv
-#' @importFrom phytools getDescendants getParent
-#' @param timed_tree Timed tree
-#' @param metadata Metadata dataframe
-#' @param time_window_initial Time in years of when to start the screen 
-#' @param time_window_increment Window
-#' @param min_descendants_per_tested_node To start the analysis, start from nodes that have this minimum number of sequences
-#' @param min_group_size Minimum group size, when creating a new potential split
-#' @param p_value_smooth P value thrishold to consider a new sline as significant.
-#' @param stepwise_deviance_explained_threshold  Change in explained deviance, recommend 0.005 (0.5 percent): By how much the new split should increase the percentage of deviance explained, at the very least.
-#' @param stepwise_AIC_threshold AIC threshold, commonly 7: By how much the new split should increase the goodness of fit, at the very least.
-#' @param weight_by_time NULL or numeric (in years): Size of the window of time on which to compute the weights
-#' @param weighting_transformation NULL, inv_freq, inv_sqrt, or inv_log: Type of weighting to use.
-#' @param k_smooth Number of knots for the splines
-#' @param plot_screening TRUE or FALSE, to plot the discovered dynamics as soon as they're found
-#' @return Potential split nodes
-#' @export
-find.groups.by.index.dynamics.2.0 = function(timed_tree, 
-                                             metadata, 
-                                             time_window_initial = 1, 
-                                             time_window_increment = 0.5, 
-                                             min_descendants_per_tested_node = 100, 
-                                             min_group_size = 25,
-                                             p_value_smooth = 0.01,
-                                             stepwise_deviance_explained_threshold = 0.005,
-                                             stepwise_AIC_threshold = 7,
-                                             weight_by_time = NULL,
-                                             weighting_transformation = c(NULL, 'inv_freq', 'inv_sqrt', 'inv_log'),
-                                             k_smooth = 5,
-                                             parallelize_code = F,
-                                             number_cores = 2,
-                                             plot_screening = T,
-                                             max_groups_found = 100,
-                                             keep_track = F){
-  ## Store paths from root to all tips and nodes
-  paths_root_to_all_nodes = path.root.to.all.nodes(timed_tree)
-  
-  ## Store descendants for all nodes
-  descendants_all_nodes = descendants.all.nodes(timed_tree)
-  
-  ## Store number of descendants for all nodes
-  nb_descendants_all_nodes = number.descendants.all.nodes(timed_tree)
-  
-  ## Remove potential NAs
-  idx = which(is.infinite(metadata$index) | is.nan(metadata$index))
-  if(length(idx)>0) metadata = metadata[-idx,]
-  
-  ## Remove potential 1s
-  idx = which(metadata$index >= 1)
-  if(length(idx)>0) metadata$index[idx] = 0.99
-  
-  ## Row names
-  metadata_rownames = metadata$ID
-  
-  ## List all nodes
-  nodes_to_test = metadata_rownames[which(metadata$is.node == 'yes')]
-  ## Remove the root 
-  nodes_to_test = nodes_to_test[which(nodes_to_test != timed_tree$Nnode + 2)]
-  
-  ## Remove nodes that have less than minimum number of descendants
-  nodes_to_test = nodes_to_test[which(nb_descendants_all_nodes[as.numeric(nodes_to_test)] >= min_descendants_per_tested_node)]
-  
-  ## Set weights, if user selected weighting by time
-  weights = NULL
-  if(!is.numeric(weight_by_time) & !is.null(weight_by_time)) stop('Weight_by_time is not NULL or numeric')
-  if(!is.null(weight_by_time)){
-    weights = rep(NA, length(metadata$time))
-    window_weights = seq(min(metadata$time)-1e4, max(metadata$time)+1e4, weight_by_time)
-    freq = hist(metadata$time, breaks = window_weights, plot = F)
-    freq$counts[which(freq$counts == 0)] = NA
-    if(length(weighting_transformation) != 1) stop('Weighting_transformation parameter is not of length 1, please supply one weighting transformation')
-    freqs_weighted = switch(weighting_transformation, 
-                            'inv_freq' = {sum(freq$counts, na.rm = T)/freq$counts}, 
-                            'inv_sqrt' = {sum(sqrt(freq$counts), na.rm = T)/sqrt(freq$counts)}, 
-                            'inv_log'  = {sum(log(freq$counts), na.rm = T)/log(freq$counts)}
-    )
-    for(i in 1:(length(window_weights)-1)){
-      weights[which(metadata$time> window_weights[i] &
-                      metadata$time<= window_weights[i+1])] = freqs_weighted[i]
-    }
-  }
-  
-  ## To store iterations
-  dev_explained_all = NULL
-  best_dev_explained = NULL
-  best_AIC = NULL
-  best_BIC = NULL
-  best_summary = NULL
-  best_mod = NULL
-  best_groups = NULL
-  best_nodes_names = NULL
-  
-  ## Initialize window
-  w = 0 
-  window = 0
-  
-  ## Store split nodes
-  nodes_recorded = NULL
-  while(window < max(metadata$time)){
-    
-    ## Set argument for while loop
-    go_to_next_window = F
-    n_tested_within_window = 0 ## To prevent endless loop
-    n_groups = 0
-    
-    ## Set new window
-    window = time_window_initial + w*time_window_increment
-    print(paste0('Considering tree up to ', window, '-------------------------->'))
-    
-    ## Set deviance explained in the new window
-    dev_explained_window = 0
-    
-    while(go_to_next_window == F & n_tested_within_window < 1000 &  n_groups < max_groups_found){
-      ## Get the metadata for this time window
-      metadata_sub = metadata[which(metadata$time <= window),]
-      
-      if(nrow(metadata_sub) >= min_group_size*2){
-        ## Get weights for isolates in this window 
-        weights_sub = weights[which(metadata$time <= window)]
-        ## Isolated names
-        metadata_sub_rownames = metadata_sub$ID
-        ## Get the list of nodes to test for this time window
-        nodes_to_test_tmp = nodes_to_test[which(!is.na(match(as.numeric(nodes_to_test), metadata_sub$ID)))]
-        
-        ## Compute null fit - fit with only the recorded nodes
-        mod_null_significant = F
-        while(mod_null_significant == F){
-          if(length(nodes_recorded) == 0){
-            clade_data_null = matrix(NA, nrow = length(metadata_sub_rownames), ncol = 1)
-            colnames(clade_data_null) = c('time')
-            clade_data_null = as.data.frame(clade_data_null)
-            clade_data_null$time = metadata_sub$time
-            
-            clade_membership_recorded = NULL
-            
-            ## Fit model
-            mod_null = run_gam_model(metadata_sub = metadata_sub, clade_data = clade_data_null, weights_sub = weights_sub, k_smooth = k_smooth, coefs = NULL, sp = NULL)
-            
-            ## Retrieve summary and names of variable
-            s_null = summary(mod_null)
-            nodes_names_null = 'time'
-            
-            ## Compute fit error and AIC
-            dev_explained_null = s_null$dev.expl
-            AIC_null = AIC(mod_null)
-            BIC_null = BIC(mod_null)
-            
-            dev_explained_null_init = s_null$dev.expl
-          } else {
-            ## First get the clade membership of the nodes found in previous iterations
-            clade_membership_recorded = NULL
-            for(r in 1:length(nodes_recorded)){
-              sub_tmp = descendants_all_nodes[[as.numeric(nodes_recorded[r])]]
-              sub_tmp = sub_tmp[which(is.na(match(as.character(sub_tmp), metadata_sub_rownames)) == F)]
-              m = match(metadata_sub_rownames, as.character(sub_tmp))
-              clade_membership_recorded[[r]] = rep(NA, nrow(metadata_sub))
-              clade_membership_recorded[[r]][which(is.na(m) == T)] = 0
-              clade_membership_recorded[[r]][which(is.na(m) == F)] = 1
-              names(clade_membership_recorded)[r] = nodes_recorded[r]
-            }
-            nodes_to_test_tmp = nodes_to_test_tmp[which(is.na(match(nodes_to_test_tmp, nodes_recorded)))]
-            
-            ## Put all data in one dataframe, making sure the columns are ordered by time
-            clade_data_null = matrix(NA, nrow = length(metadata_sub_rownames), ncol = length(clade_membership_recorded) + 1)
-            colnames(clade_data_null) = c('time', names(clade_membership_recorded))
-            clade_data_null = as.data.frame(clade_data_null)
-            clade_data_null[,(1:length(clade_membership_recorded))+1] = do.call(cbind, clade_membership_recorded)
-            clade_data_null$time = metadata_sub$time
-            
-            ## Compute groups
-            groups = apply(clade_data_null[,2:ncol(clade_data_null)], MARGIN = 1, function(x)paste0(x,collapse = '_'))
-            
-            # Fit model
-            mod_null = run_gam_model(metadata_sub = metadata_sub, clade_data = clade_data_null, weights_sub = weights_sub, k_smooth = k_smooth, coefs = NULL, sp = NULL)
-            
-            ## Retrieve summary and names of variable (in correct order)
-            s_null = summary(mod_null)
-            nodes_names_null = colnames(clade_data_null)
-            
-            ## Compute fit error and AIC
-            dev_explained_null = s_null$dev.expl
-            AIC_null = AIC(mod_null)
-            BIC_null = BIC(mod_null)
-          }
-          
-          threshold_p_value_smooth = p_value_smooth
-          if(!all(s_null$s.pv <= threshold_p_value_smooth) & length(s_null$s.pv) > 1){
-            mod_null_significant = F
-            if(length(nodes_recorded) == 1){
-              nodes_recorded = NULL
-              print('Problem, no node recorded')
-            }else{
-              index = which(s_null$s.pv > threshold_p_value_smooth)-1
-              index = index[which(index !=0)]
-              if(length(index) > 0){
-                nodes_recorded = nodes_recorded[-index]
-                print('Problem, no node recorded')
-              }else{
-                mod_null_significant = T
-              }
-            }
-          }else{
-            mod_null_significant = T
-          }
-        }
-        
-        if(n_tested_within_window == 0){ ## If this is the first iteration within the window, set a null deviance explained
-          dev_explained_window = dev_explained_null
-        }
-        
-        print(paste0('Testing ', length(nodes_to_test_tmp), ' nodes'))
-        if(parallelize_code == T){
-          cl = parallel::makeCluster(number_cores)
-          clusterExport(cl=cl, list("metadata_sub", "metadata_sub_rownames", "nodes_to_test_tmp", 
-                                    "descendants_all_nodes", "min_group_size",
-                                    "clade_membership_recorded", "clade_data_null", 
-                                    "weights_sub", "k_smooth", "mod_null", "test_node_gam", "run_gam_model"),
-                        envir=environment())
-          mods_tmp = parallel::parLapplyLB(cl = cl, X = 1:length(nodes_to_test_tmp),
-                                           fun = function(X)test_node_gam(X, metadata_sub, metadata_sub_rownames,
-                                                                          nodes_to_test_tmp, descendants_all_nodes,
-                                                                          min_group_size, clade_membership_recorded,
-                                                                          clade_data_null, weights_sub, k_smooth, mod_null))
-          
-          
-          parallel::stopCluster(cl)
-        }else{
-          mods_tmp = lapply(X = 1:length(nodes_to_test_tmp), 
-                            FUN = function(X)test_node_gam(X, metadata_sub, metadata_sub_rownames, 
-                                                           nodes_to_test_tmp, descendants_all_nodes, 
-                                                           min_group_size, clade_membership_recorded, 
-                                                           clade_data_null, weights_sub, k_smooth, mod_null))
-        }
-        
-        ## Set elements to store results
-        dev_explained_tmp = rep(NA, length(nodes_to_test_tmp))
-        AICs_tmp = rep(NA, length(nodes_to_test_tmp))
-        BICs_tmp = rep(NA, length(nodes_to_test_tmp))
-        summaries_tmp = as.list(rep(NA, length(nodes_to_test_tmp)))
-        groups_tmp = as.list(rep(NA, length(nodes_to_test_tmp)))
-        
-        for(i in 1:length(mods_tmp)){
-          if(!is.na(mods_tmp[[i]]$mod[1])){
-            # Fill in results
-            s = summary(mods_tmp[[i]]$mod)
-            if(all(s$s.pv < p_value_smooth) & all(s$p.pv < p_value_smooth)){
-              dev_explained_tmp[i] = s$dev.expl
-              AICs_tmp[i] = AIC(mods_tmp[[i]]$mod)
-              BICs_tmp[i] = BIC(mods_tmp[[i]]$mod)
-              summaries_tmp[[i]] = s
-              groups_tmp[[i]] = mods_tmp[[i]]$groups
-            }else{
-              dev_explained_tmp[i] = NA
-              AICs_tmp[i] = NA
-              BICs_tmp[i] = NA
-              summaries_tmp[[i]] = NA
-              groups_tmp[[i]] = NA
-            }
-          }else{
-            dev_explained_tmp[i] = NA
-            AICs_tmp[i] = NA
-            BICs_tmp[i] = NA
-            summaries_tmp[[i]] = NA
-            groups_tmp[[i]] = NA
-          }
-        }
-        ## Find the model that maximizes the explained variance
-        if(!all(is.na(dev_explained_tmp))){
-          diff_dev_explained = max(dev_explained_tmp, na.rm = T) -  dev_explained_window
-          max_dev_explained = max(dev_explained_tmp, na.rm = T)
-          BIC_diff = BICs_tmp - BIC_null
-          AIC_diff = AICs_tmp - AIC_null
-          min_BIC_diff = min(BIC_diff, na.rm = T)
-          min_AIC_diff = min(AIC_diff, na.rm = T)
-        }else{
-          max_dev_explained = -1000
-          diff_dev_explained = -1000
-          min_BIC_diff = -1000
-          min_AIC_diff = -1000
-        }
-        
-        if(min_AIC_diff < -stepwise_AIC_threshold & diff_dev_explained > stepwise_deviance_explained_threshold){
-          dev_explained_window = max(dev_explained_tmp, na.rm = T)
-          index = which.max(dev_explained_tmp)
-          nodes_recorded = c(nodes_recorded, nodes_to_test_tmp[index])
-          n_groups = n_groups + 1
-          print('Better fit found')
-          print(paste0('Deviance explained by ',  round(diff_dev_explained*100, digits = 3), '% more'))
-          print(nodes_recorded)
-          
-          if(plot_screening == T){
-            ## Find group colours
-            colors_names = MetBrewer::met.brewer(name="Cross", n=length(levels(as.factor(groups_tmp[[index]]))), type="continuous")
-            colors = as.factor(groups_tmp[[index]])
-            levels(colors) = colors_names
-            colors = as.character(colors)
-            
-            ## Plot
-            plot(metadata_sub$time, metadata_sub$index, pch = 16, bty = 'n', col = colors)
-            points(metadata_sub$time, exp(predict(mods_tmp[[index]]$mod)), pch = 16, cex = 0.5, col = colors)
-          }
-          
-          ## Save best result
-          idx = length(best_dev_explained)+1
-          best_dev_explained = c(best_dev_explained, dev_explained_window)
-          best_AIC = c(best_AIC, AICs_tmp[[index]])
-          best_BIC = c(best_BIC, BICs_tmp[[index]])
-          best_summary[[idx]] = summaries_tmp[[index]]
-          best_mod[[idx]] = mods_tmp[[index]]$mod
-          best_groups[[idx]] = groups_tmp[[index]]
-          best_nodes_names[[idx]] = nodes_recorded
-          dev_explained_all[[idx]] = dev_explained_tmp
-        }else{
-          go_to_next_window = T
-          print('No better fit found')
-        }
-        n_tested_within_window = n_tested_within_window + 1
-      }else{
-        go_to_next_window = T
-      }
-    }
-    w = w +1
-  }
-  if(keep_track == F){
-    return('potential_splits' =  as.numeric(nodes_recorded))
-  }else{
-    return(list('potential_splits' =  as.numeric(nodes_recorded),
-                'dev_explained_all' = dev_explained_all,
-                'best_dev_explained' =  as.numeric(best_dev_explained),
-                'first_dev' = dev_explained_null_init,
-                'best_AIC' = best_AIC,
-                'best_BIC', best_BIC,
-                'best_summary' = best_summary,
-                'best_mod' = best_mod,
-                'best_groups' = best_groups,
-                'best_nodes_names' = best_nodes_names))
-  }
-}
-
-#' Find groups defined by index dynamics 3.0
-#'
-#' This code is fitting a generalised additive model (gam) to the index dynamics, trying to find the smallest number of lineages to explain best the index dynamics.
-#' Model targets are AIC, explained deviance or maximum number of groups
-#' The script is run until a target is met, and the user can choose to record all the different states (keep_track), or not
-#'
-#' Non-parametric test, potential nodes can be filtered by support and threshold_node_support. This can be a minimum number of mutations on the branch leading to the node, or a bootstrap support.
-#'
-#' @import mgcv
-#' @importFrom phytools getDescendants getParent
-#' @param timed_tree Timed tree
-#' @param metadata Metadata dataframe
-#' @param node_support So numeric value of support for each node (e.g. mutations on the branch leading to the node, or bootstrap support)
-#' @param threshold_node_support Threshold on the node support for the nodes to be considered in the detection algorithm
-#' @param time_window_initial Time in years of when to start the screen 
-#' @param time_window_increment Window
-#' @param min_descendants_per_tested_node To start the analysis, start from nodes that have this minimum number of sequences
-#' @param min_group_size Minimum group size, when creating a new potential split
-#' @param p_value_smooth p-value thrishold to consider a new sline as significant.
-#' @param stepwise_deviance_explained_threshold  Change in explained deviance, recommend 0.005 (0.5 percent): By how much the new split should increase the percentage of deviance explained, at the very least.
-#' @param stepwise_AIC_threshold AIC threshold, commonly 7: By how much the new split should increase the goodness of fit, at the very least.
-#' @param weight_by_time NULL or numeric (in years): Size of the window of time on which to compute the weights
-#' @param weighting_transformation NULL, inv_freq, inv_sqrt, or inv_log: Type of weighting to use.
-#' @param k_smooth Number of knots for the splines
-#' @param plot_screening TRUE or FALSE, to plot the discovered dynamics as soon as they're found
-#' @param parallelize_code TRUE or FALSE, to parallelise code
-#' @param number_cores Integer, if parallelised, how many cores to use
-#' @param max_groups_found Integer, Maximum number of groups to find
-#' @param keep_track TRUE or FALSE, whether user wants to output all the steps
-#' @return Potential split nodes at target, and if keep_track==T, all the different nodes at each iteration
-#' @export
-find.groups.by.index.dynamics.3.0 = function(timed_tree, 
+# Find groups defined by index dynamics
+#
+# This code is fitting a generalised additive model (gam) to the index dynamics, trying to find the smallest number of lineages to explain best the index dynamics.
+# Model targets are AIC, explained deviance or maximum number of groups
+# The script is run until a target is met, and the user can choose to record all the different states (keep_track), or not
+# 
+# Non-parametric test, potential nodes can be filtered by support and threshold_node_support. This can be a minimum number of mutations on the branch leading to the node, or a bootstrap support.
+find.groups.by.index.dynamics = function(timed_tree, 
                                              metadata, 
                                              node_support = NULL,
                                              threshold_node_support = 0.5,
@@ -1099,7 +489,6 @@ find.groups.by.index.dynamics.3.0 = function(timed_tree,
     
     ## Set new window
     window = time_window_initial + w*time_window_increment
-    print(paste0('Considering tree up to ', window, '-------------------------->'))
     
     ## Set deviance explained in the new window
     dev_explained_window = 0
@@ -1201,7 +590,7 @@ find.groups.by.index.dynamics.3.0 = function(timed_tree,
           dev_explained_window = dev_explained_null
         }
         
-        print(paste0('Testing ', length(nodes_to_test_tmp), ' nodes'))
+        print(paste0('Testing ', length(nodes_to_test_tmp), ' nodes', '-------------------------->'))
         if(parallelize_code == T){
           cl = parallel::makeCluster(number_cores)
           parallel::clusterExport(cl=cl, list("metadata_sub", "metadata_sub_rownames", "nodes_to_test_tmp", 
@@ -1278,8 +667,8 @@ find.groups.by.index.dynamics.3.0 = function(timed_tree,
           nodes_recorded = c(nodes_recorded, nodes_to_test_tmp[index])
           n_groups = n_groups + 1
           print('Better fit found')
-          print(paste0('Deviance explained by ',  round(diff_dev_explained*100, digits = 3), '% more'))
-          print(nodes_recorded)
+          print(paste0('Deviance explained by ', round(diff_dev_explained*100, digits = 3), '% more'))
+          print(paste0('Splits recorded: ', nodes_recorded))
           
           if(plot_screening == T){
             ## Find group colours
@@ -1328,7 +717,7 @@ find.groups.by.index.dynamics.3.0 = function(timed_tree,
   }
 }
 
-#' Sub function to ouput a fit, for a selected number of nodes
+# Sub function to ouput a fit, for a selected number of nodes
 compute_fit_for_node_set = function(timed_tree, 
                                      metadata, 
                                      node_set,

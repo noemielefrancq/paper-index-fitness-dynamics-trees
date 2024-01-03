@@ -193,4 +193,80 @@ compute.timescale=function(genome_length, mu, time_window, Ne=1E5, r_squared_thr
   return(timescale)
 }
 
+## Plot
+axisPhylo_NL = function (side = 1, root.time = NULL, backward = TRUE, at_axis = NULL, lab_axis = NULL, ...){
+  lastPP <- get("last_plot.phylo", envir = .PlotPhyloEnv)
+  type <- lastPP$type
+  if (type == "unrooted")
+    stop("axisPhylo() not available for unrooted plots; try add.scale.bar()")
+  if (type == "radial")
+    stop("axisPhylo() not meaningful for this type of plot")
+  if (is.null(root.time))
+    root.time <- lastPP$root.time
+  if (type %in% c("phylogram", "cladogram")) {
+    xscale <- if (lastPP$direction %in% c("rightwards", "leftwards"))
+      range(lastPP$xx)
+    else range(lastPP$yy)
+    tmp <- lastPP$direction %in% c("leftwards", "downwards")
+    tscale <- c(0, xscale[2] - xscale[1])
+    if (xor(backward, tmp))
+      tscale <- tscale[2:1]
+    if (!is.null(root.time)) {
+      tscale <- tscale + root.time
+      if (backward)
+        tscale <- tscale - xscale[2]
+    }
+    beta <- diff(xscale)/diff(tscale)
+    alpha <- xscale[1] - beta * tscale[1]
+    if(is.null(at_axis) == T){
+      x <- beta * lab + alpha
+      lab <- pretty(tscale)
+    }
+    # if(is.null(at_axis) != F){
+    x <- at_axis
+    lab <- lab_axis
+    # }
+    axis(side = side, at = x, labels = lab, ...)
+  }
+  else {
+    n <- lastPP$Ntip
+    xx <- lastPP$xx[1:n]
+    yy <- lastPP$yy[1:n]
+    r0 <- max(sqrt(xx^2 + yy^2))
+    alpha <- sort(setNames(rect2polar(xx, yy)$angle, 1:n))
+    angles <- c(diff(alpha), 2 * pi - alpha[n] + alpha[1L])
+    j <- which.max(angles)
+    i <- if (j == 1L)
+      n
+    else j - 1L
+    firstandlast <- as.integer(names(angles[c(i, j)]))
+    theta0 <- mean(atan2(yy[firstandlast], xx[firstandlast]))
+    x0 <- r0 * cos(theta0)
+    y0 <- r0 * sin(theta0)
+    inc <- diff(pretty(c(0, r0))[1:2])
+    srt <- 360 * theta0/(2 * pi)
+    coef <- -1
+    if (abs(srt) > 90) {
+      srt <- srt + 180
+      coef <- 1
+    }
+    len <- 0.025 * r0
+    r <- r0
+    while (r > 1e-08) {
+      x <- r * cos(theta0)
+      y <- r * sin(theta0)
+      if (len/r < 1) {
+        ra <- sqrt(len^2 + r^2)
+        thetaa <- theta0 + coef * asin(len/r)
+        xa <- ra * cos(thetaa)
+        ya <- ra * sin(thetaa)
+        segments(xa, ya, x, y)
+        text(xa, ya, r0 - r, srt = srt, adj = c(0.5,
+                                                1.1), ...)
+      }
+      r <- r - inc
+    }
+    segments(x, y, x0, y0)
+  }
+}
 
