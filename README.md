@@ -114,13 +114,13 @@ dataset_with_nodes = data.frame('ID' = c(1:n_seq, n_seq+(1:(n_seq-1))),
 #### Compute index of every tip and node
 
 ``` r
-dataset_with_nodes$index = Index::compute.index(time_distance_mat = genetic_distance_mat, 
-                                                timed_tree = tree_sars_cov2, 
-                                                time_window = wind,
-                                                metadata = dataset_with_nodes, 
-                                                mutation_rate = mutation_rate,
-                                                timescale = timescale,
-                                                genome_length = genome_length)
+dataset_with_nodes$index = compute.index(time_distance_mat = genetic_distance_mat, 
+                                         timed_tree = tree_sars_cov2, 
+                                         time_window = wind,
+                                         metadata = dataset_with_nodes, 
+                                         mutation_rate = mutation_rate,
+                                         timescale = timescale,
+                                         genome_length = genome_length)
 ```
 
 ## Plot tree & index below, with colors from NextStrain clades
