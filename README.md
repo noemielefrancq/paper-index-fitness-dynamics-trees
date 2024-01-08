@@ -43,6 +43,14 @@ library(MetBrewer, quiet = T); library(parallel, quiet = T); library(mgcv, quiet
 library(cowplot, quiet = T); library(ggplot2, quiet = T); library(ggtree, quiet = T)
 ```
 
+Versions:
+
+Packages: ape v5.7-1, phytools v1.9-16, stringr v1.5.0, MetBrewer
+v0.2.0, parallel v4.1.2, mgcv v1.8-42, cowplot v1.1.1, ggplot2 v3.4.3,
+ggtree v3.2.1.
+
+R: 4.1.2
+
 #### Load data
 
 Load the NexStrain SARS-CoV-2 tree, in which all the tip name include:
