@@ -21,11 +21,10 @@ In this repo you will find:
 2. In ```2_Functions```, the codes that are behind the analysis:
     * fitness index dynamics
     * lineages detection
-    * lineage fitness estimation (will be updated soon)
-    * lineage-defining mutations (will be updated soon)
-3. In ```3_Analysis_per_pathogen```, the analysis for each pathogen (will be updated soon)
+    * lineage fitness estimation
+    * lineage-defining mutations 
 
-*Below is a brief example of what can be archived on SARS-CoV-2, using the codes in the folder ```2_Codes```.*
+*Below is a brief example of lineage detection on SARS-CoV-2, using the codes in the folder ```2_Codes```.*
 
 # Example on SARS-CoV-2
 
