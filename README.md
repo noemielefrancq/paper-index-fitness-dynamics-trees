@@ -12,13 +12,11 @@ In this repo you will find:
 2.  In `2_Functions`, the codes that are behind the analysis:
     - fitness index dynamics
     - lineages detection
-    - lineage fitness estimation (will be updated soon)
-    - lineage-defining mutations (will be updated soon)
-3.  In `3_Analysis_per_pathogen`, the analysis for each pathogen (will
-    be updated soon)
+    - lineage fitness estimation
+    - lineage-defining mutations
 
-*Below is a brief example of what can be archived on SARS-CoV-2, using
-the codes in the folder `2_Codes`.*
+*Below is a brief example of lineage detection on SARS-CoV-2, using the
+codes in the folder `2_Codes`.*
 
 # Example on SARS-CoV-2
 
@@ -26,13 +24,11 @@ the codes in the folder `2_Codes`.*
 
 #### Load index functions
 
-First, source all the functions of this repo.
+First, source all the necessary functions:
 
 ``` r
 source(file = '2_Functions/2_1_Index_computation_20231220.R')
 source(file = '2_Functions/2_2_Lineage_detection_20231220.R')
-source(file = '2_Functions/2_3_Lineage_fitness_estimation.R')
-source(file = '2_Functions/2_4_Lineage_defining_mutations.R')
 ```
 
 Load necessary packages

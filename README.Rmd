@@ -37,12 +37,10 @@ In this repo you will find:
 setwd('~/Documents/THD/Index_paper_methods_Sc2_H3N2_BP_TB/paper-index-fitness-dynamics-trees/')
 ```
 
-First, source all the functions of this repo.
+First, source all the necessary functions:
 ```{r, eval=T}
 source(file = '2_Functions/2_1_Index_computation_20231220.R')
 source(file = '2_Functions/2_2_Lineage_detection_20231220.R')
-source(file = '2_Functions/2_3_Lineage_fitness_estimation.R')
-source(file = '2_Functions/2_4_Lineage_defining_mutations.R')
 ```
 
 Load necessary packages
