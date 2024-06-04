@@ -2,6 +2,8 @@ Code for the paper ‘Learning the fitness dynamics of pathogens from
 phylogenies’
 ================
 
+Find the pre-print [here]([https://website-name.com](https://www.medrxiv.org/content/10.1101/2023.12.23.23300456v1)).
+
 Last update: 3 January 2024
 
 # Content of this repo
