@@ -203,6 +203,189 @@ load('2_analysis_index/1_index_computations/Initial_index_computation_and_parame
 load('2_analysis_index/2_find_index_groups/Lineages_detected_11102023.Rdata')
 ########################################################################################################################################
 
+
+
+########################################################################################################################################
+## 1 - reconstruct ancestral states
+########################################################################################################################################
+reconstruct_node_states = function(tree, dataset_tips, dataset_with_nodes, min_prop, max_prop, names_seqs){
+  # Meta-data with nodes 
+  dataset_with_inferred_resonstruction = dataset_with_nodes[,1:4]
+  possible_snps = names(dataset_tips[,4:ncol(dataset_tips)])
+  
+  ## Filter SNP on frequency: only keep SNP that are present in:
+  ## >1% of dataset
+  ## <99% of dataset
+  prevalence = t(apply(dataset_tips[,4:ncol(dataset_tips)], MARGIN = 2, function(x)table(factor(x, levels = c("0", "1")))))
+  prevalence_prop = prevalence[,2]/(prevalence[,1]+prevalence[,2])
+  prevalence = cbind(prevalence, prevalence_prop)
+  possible_snps = names(which(prevalence[,3] >= min_prop & prevalence[,3] <= max_prop))
+  
+  ## Filter dataset_tips accordingly
+  a = which(is.na(match(colnames(dataset_tips), possible_snps)) == F)
+  dataset_tips = dataset_tips[,c(1:3, a)]
+  
+  print(paste0('Going though ', length(possible_snps), ' snps'))
+  k=1
+  for(i in possible_snps){
+    print(paste0(k, ' / ', length(possible_snps), ' snps'))
+    
+    snp_data = dataset_tips[,which(colnames(dataset_tips) == i)]
+    snp_data = as.factor(snp_data)
+    names(snp_data) = names_seqs
+    
+    ## Perform reconstruction for this position
+    # rec = phytools::fastAnc(tree = tree, x = snp_data, CI = TRUE, vars = T) ## factAnc lots faster than ace.ML
+    rec = ape::ace(phy = tree, x = snp_data, method = "pic")
+    rec_all = c(snp_data, rec$ace) ## List of all states: first all tips, then all nodes
+    
+    ## Find first state, to set it to 0, always
+    first_state = rec_all[which(dataset_with_inferred_resonstruction$ID == length(names_seqs) + 1)]
+    first_state = round(first_state, digits = 0)
+    
+    ## Write reconstruction in the big dataset
+    if(first_state < 1.5){ ## First state is 0: all good
+      dataset_with_inferred_resonstruction = cbind(dataset_with_inferred_resonstruction, rec_all - 1)     
+    }
+    if(first_state > 1.5){ ## First state is 1: have to change to 0
+      dataset_with_inferred_resonstruction = cbind(dataset_with_inferred_resonstruction,  2 - rec_all)
+    }
+    
+    ## Set column name to position name
+    colnames(dataset_with_inferred_resonstruction)[which(colnames(dataset_tips) == i) +1] = i
+    
+    k=k+1
+  }
+  return(list('dataset_with_inferred_resonstruction' = dataset_with_inferred_resonstruction,
+              'snp_prevalence' = prevalence,
+              'possible_snps' = possible_snps))
+}
+########################################################################################################################################
+
+########################################################################################################################################
+## Load data
+########################################################################################################################################
+## Locations
+locations = c('World', 'Africa', 'Asia', 'Europe', 'North_America', 'Oceania', 'South_America')
+
+## Timed-tree
+tree_sars_all = list(tree_sars_world, 
+                     tree_sars_africa, 
+                     tree_sars_asia, 
+                     tree_sars_europe, 
+                     tree_sars_northamerica, 
+                     tree_sars_oceania,
+                     tree_sars_southamerica)
+names(tree_sars_all) = locations
+
+## Names all sequences
+names_seqs_all = list(names_seqs_world, 
+                      names_seqs_africa, 
+                      names_seqs_asia, 
+                      names_seqs_europe, 
+                      names_seqs_northamerica, 
+                      names_seqs_oceania,
+                      names_seqs_southamerica)
+names(names_seqs_all) = locations
+
+## Collection times of all sequences
+times_seqs_all = list(times_seqs_world, 
+                      times_seqs_africa, 
+                      times_seqs_asia, 
+                      times_seqs_europe, 
+                      times_seqs_northamerica, 
+                      times_seqs_oceania,
+                      times_seqs_southamerica)
+names(times_seqs_all) = locations
+
+## Correspondences Virus ID // EPI ID (GISAID)
+correspondence_ID_EPI_world = read.csv('1_Data_Nextstrain_20230414/World/nextstrain_ncov_gisaid_global_all-time_timetree_virus_ID.csv', header = F, col.names = c("N", "Virus name", "Accession ID"))
+correspondence_ID_EPI_asia = read.csv('1_Data_Nextstrain_20230414/Asia/nextstrain_ncov_gisaid_asia_all-time_timetree_virus_ID.csv', header = F, col.names = c("N", "Virus name", "Accession ID"))
+correspondence_ID_EPI_africa = read.csv('1_Data_Nextstrain_20230414/Africa/nextstrain_ncov_gisaid_africa_all-time_timetree_virus_ID.csv', header = F, col.names = c("N", "Virus name", "Accession ID"))
+correspondence_ID_EPI_europe = read.csv('1_Data_Nextstrain_20230414/Europe/nextstrain_ncov_gisaid_europe_all-time_timetree_virus_ID.csv', header = F, col.names = c("N", "Virus name", "Accession ID"))
+correspondence_ID_EPI_northamerica = read.csv('1_Data_Nextstrain_20230414/North_America/nextstrain_ncov_gisaid_north-america_all-time_timetree_virus_ID.csv', header = F, col.names = c("N", "Virus name", "Accession ID"))
+correspondence_ID_EPI_oceania = read.csv('1_Data_Nextstrain_20230414/Oceania/nextstrain_ncov_gisaid_oceania_all-time_timetree_virus_ID.csv', header = F, col.names = c("N", "Virus name", "Accession ID"))
+correspondence_ID_EPI_southamerica = read.csv('1_Data_Nextstrain_20230414/South_America/nextstrain_ncov_gisaid_south-america_all-time_timetree_virus_ID.csv', header = F, col.names = c("N", "Virus name", "Accession ID"))
+correspondence_ID_EPI_all = list(correspondence_ID_EPI_world, 
+                                 correspondence_ID_EPI_africa, 
+                                 correspondence_ID_EPI_asia, 
+                                 correspondence_ID_EPI_europe, 
+                                 correspondence_ID_EPI_northamerica, 
+                                 correspondence_ID_EPI_oceania,
+                                 correspondence_ID_EPI_southamerica)
+names(correspondence_ID_EPI_all) = locations
+
+## Datasets with nodes and tips
+dataset_with_nodes_all = list(dataset_with_nodes_world, 
+                              dataset_with_nodes_africa, 
+                              dataset_with_nodes_asia, 
+                              dataset_with_nodes_europe, 
+                              dataset_with_nodes_northamerica, 
+                              dataset_with_nodes_oceania,
+                              dataset_with_nodes_southamerica)
+names(dataset_with_nodes_all) = locations
+########################################################################################################################################
+
+########################################################################################################################################
+## Reconstruction
+########################################################################################################################################
+ORFs = c('E', 'full', 'M', 'N', 'ORF10', 'ORF14', 
+         'ORF1a', 'ORF1b', 'ORF3a', 'ORF6', 'ORF7a', 'ORF7b',
+         'ORF8', 'ORF9b', 'S')
+
+foreach(l = 1:length(locations)) %do% {
+  print(paste0('Location: ', locations[l]))
+  names_seqs_world_simple = unlist(lapply(names_seqs_all[[l]], function(x){
+    tmp = str_split(x, pattern = '\\.')[[1]]
+    if(length(tmp) == 1){
+      return(tmp)
+    }else if(length(tmp) == 2){
+      return(tmp[1])
+    }else {
+      tmp = tmp[-length(tmp)]
+      return(paste0(tmp, collapse = '.'))
+    }
+  }))
+  vcf_names = list.files(path = paste0('2_analysis_index/3_snp_association/vcfs_and_AA_reconstructions/',locations[l], '/', collapse = ''), pattern = '*.vcf')
+  
+  for(o in 1:length(ORFs)){
+    print(paste0('Location: ', locations[l], ' / ORF: ', ORFs[o]))
+    data_vcf = read.csv(file = paste0('2_analysis_index/3_snp_association/vcfs_and_AA_reconstructions/',locations[l], '/', vcf_names[o], collapse = ''), sep = '\t')
+    m = match(colnames(data_vcf), correspondence_ID_EPI_all[[l]]$Accession.ID)
+    colnames(data_vcf)[which(!is.na(m))] = correspondence_ID_EPI_all[[l]]$Virus.name[m[which(!is.na(m))]]
+    
+    ## Create dataset with names of each sequence
+    dataset_tips = data.frame('ID' = 1:length(names_seqs_all[[l]]),
+                              'name_seq' = names_seqs_all[[l]],
+                              'time' = times_seqs_all[[l]])
+    ## Add AA data to the main dataset
+    a = match(names_seqs_world_simple, colnames(data_vcf))
+    dataset_tips = cbind(dataset_tips, t(data_vcf[,a]))
+    colnames(dataset_tips) = c('ID', 'name_seq', 'time', data_vcf$POS)
+    
+    ## Reconstruction
+    reconstruction = reconstruct_node_states(tree = tree_sars_all[[l]], 
+                                             dataset_tips = dataset_tips, 
+                                             dataset_with_nodes = dataset_with_nodes_all[[l]], 
+                                             min_prop = 0, 
+                                             max_prop = 1, 
+                                             names_seqs = names_seqs_all[[l]])
+    ## Save
+    saveRDS(reconstruction, file = paste0('2_analysis_index/3_snp_association/vcfs_and_AA_reconstructions/', locations[l], '/', locations[l], '_reconstruction_', ORFs[o], '.rds'))
+  }
+}
+########################################################################################################################################
+
+
+
+
+
+
+
+########################################################################################################################################
+## 2 - association scores
+########################################################################################################################################
+
 ########################################################################################################################################
 ## Load AA data
 ########################################################################################################################################

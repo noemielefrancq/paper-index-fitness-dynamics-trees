@@ -2,7 +2,7 @@ Code for the paper ‘Learning the fitness dynamics of pathogens from
 phylogenies’
 ================
 
-Last update: 3 January 2024
+Last update: 10 September 2024
 
 # Content of this repo
 
@@ -15,20 +15,244 @@ In this repo you will find:
     - lineage fitness estimation
     - lineage-defining mutations
 
-*Below is a brief example of lineage detection on SARS-CoV-2, using the
-codes in the folder `2_Codes`.*
+# Content of this README
+
+1.  [General guidance](#general-guidance) on how to use *phylowave* on
+    your data
+2.  [An example](#example-on-sars-cov-2) of lineage detection on a
+    SARS-CoV-2 phylogeny
+
+# General guidance
+
+*phylowave* is an approach that summarises changes in population
+composition in phylogenetic trees of pathogens, allowing for the
+automatic detection of lineages based on shared fitness and evolutionary
+relationships. It is currently written in R, with the exception of the
+fitness model which is written in Stan. On principle, *phylowave* is
+applicable to any pathogen (*e.g.* from viruses and bacteria) provided a
+timed-phylogeny is available and the sampling is representative of the
+diversity.
+
+Here we describe the general organisation of the pipeline, which is
+detailed in the following sections:
+
+- [Input](#input)
+- [Index computation](#index-computation)
+- [Lineage detection](#lineage-detection)
+- [Quantification of lineages’
+  fitness](#quantification-of-lineages-fitness)
+- [Lineage-defining mutations](#lineage-defining-mutations)
+
+![](README_files/Schematic_pipeline.png)<!-- -->
+
+## Input
+
+The minimal inputs to use the pipeline are:
+
+- a time-resolved phylogenetic tree, which must be *binary* and of class
+  *phylo*
+- the sampling times of all tips
+
+## Index computation
+
+To compute the index of all nodes, one needs:
+
+- The genome length of the pathogen considered: *genome_length* (in bp).
+- The mutation rate of the pathogen considered: *mutation_rate* (in
+  bp/genome/year), an average is fine.
+- The timescale: *timescale* (in years), this will be used to compute
+  the bandwidth, see more details below.
+- Window of time on which to search for samples in the population:
+  *wind*, see more details below.
+
+While *genome_length* and *mutation_rate* are pathogen-specific, the
+*timescale* and *wind* are both pathogen-specific and dataset-specific.
+
+**timescale**: The timescale determines the kernel which enables to
+track lineage emergence dynamically, focusing on short distances between
+nodes (containing information about recent population dynamics) rather
+than long distances (containing information about past evolution). The
+timescale is tailored to the specific pathogen studied and its choice
+depends on the molecular signal, as well as the transmission rate. In
+the study, we used timescales ranging from months (typical of RNA
+viruses) to years (typical of bacteria). To determine a timescale
+suitable for your dataset, we recommend thinking about the generation
+time of the pathogen considered, its mutation rate, and the amount of
+diversity already accumulated. For example, at the time of the analysis,
+SARS-CoV-2 was a new pathogen, spreading quickly and accumulating
+diversity at a rate of ~2 mutations per month. Therefore, a small
+timescale of less than a year chosen (0.15 years). On the contrary,
+*Mycobacterium tuberculosis* is an older and relatively slowly spreading
+pathogen, which accumulates mutations at a rate of ~0.2 mutation per
+year. A much larger timescale was then chosen (30 years), to reflect
+this. Ultimately, the best timescale is one that maximises the
+visualisation of population dynamics. We recommend trying different
+values.
+
+**wind**: The choice of *wind* will depend on the sampling intensity of
+the dataset. As a mean of example, for SARS-CoV-2, we set *wind* to 15
+days, as the dataset was intensely sampled. But for *Bordetella
+pertussis*, which is more sparsely sampled, we chose a *wind* of 1 year.
+If *wind* is too large, then all the nodes are considered to be part of
+the same time window. If *wind* is too small, then only the nodes in
+direct proximity of the node of interest will be considered in the time
+window, which can result in noisy index dynamics.
+
+The function *compute.index* will take those parameters in input, as
+well as the tree, the distance matrice and the metadata dataframe. The
+function will compute the index of all nodes (internal and terminal).
+See [the example](#example-on-sars-cov-2) for more details.
+
+To store the data throughout the analysis, we use a main dataset called
+*dataset_with_nodes* which looks like this:
+
+| ID     | name_seq  |       time | is.node | Known clade classification | Index |
+|--------|:---------:|-----------:|--------:|---------------------------:|------:|
+| $1$    | $name\_1$ |      $t_1$ |    ‘no’ |                            |       |
+| $2$    | $name\_2$ |      $t_2$ |    ‘no’ |                            |       |
+| $3$    | $name\_3$ |      $t_3$ |    ‘no’ |                            |       |
+| …      |     …     |          … |       … |                            |       |
+| $n$    | $name\_n$ |      $t_n$ |    ‘no’ |                            |       |
+| $n +1$ |  $n + 1$  |  $t_{n+1}$ |   ‘yes’ |                            |       |
+| …      |     …     |          … |       … |                            |       |
+| $2n-1$ |  $2n-1$   | $t_{2n-1}$ |   ‘yes’ |                            |       |
+
+Where $n$ is the number of tips (terminal nodes) in the tree. The column
+‘Known clade classification’ is optional, but is useful to compare the
+results to existing sequence classifications. The index of each node
+(internal and terrminal) is stored in the column ‘Index’. See code in
+[the example](#example-on-sars-cov-2).
+
+## Lineage detection
+
+To run the lineage detection algorithm, use the function
+*find.groups.by.index.dynamics.3.0*, you will need differents inputs:
+
+1.  Data: *timed_tree* and *metadata* (*dataset_with_nodes*)
+2.  Lineage detection parameters:
+    - *min_descendants_per_tested_node*: to start the analysis, start
+      from nodes that have this minimum number of sequences
+    - *min_group_size*: minimum group size, when creating a new
+      potential split
+    - *node_support*: numeric value of support of each node
+      (e.g. mutations on the branch leading to the node, or bootstrap
+      support)
+    - *threshold_node_support*: threshold on the node support for the
+      nodes to be considered in the detection algorithm
+    - *weight_by_time*: size of the window of time on which to compute
+      the weights (NULL or numeric, in years)
+    - *weighting_transformation*: type of weighting to use (NULL,
+      inv_freq, inv_sqrt, or inv_log)
+    - *max_groups_found*: maximum number of groups to find (Integer)
+3.  Technical parameters: they do not necessarily need to be updated
+    (see the function documentation for details): *p_value_smooth*,
+    *stepwise_deviance_explained_threshold*, *stepwise_AIC_threshold*,
+    *k_smooth*, *parallelize_code*, *number_cores*, *plot_screening* and
+    *keep_track*.
+
+The function outputs multiple elements in a list:
+
+- potential_splits: vector of the nodes included in most complex model
+  tested
+- best_dev_explained: vector of the deviance explained by the best
+  models for each number of groups
+- first_dev: the null deviance of the initial model (when no lineage is
+  present)
+- best_AIC : vector of the AIC of the best models for each number of
+  groups
+- best_BIC: vector of the BIC of the best models for each number of
+  groups
+- best_summary: list of the summaries of the best models for each number
+  of groups
+- best_mod: list of the best models for each number of groups
+- best_groups: list of the groups used in the best models for each
+  number of groups
+- best_nodes_names: list of the nodes included in the best models for
+  each number of groups
+
+Typically, one chooses a value of *max_groups_found* greater than the
+expected number of lineages. The algorithm then runs until it finds all
+those groups, or until it cannot find any significant split anymore. The
+user can then check the deviance explained by all the models with
+increasing complexity and choose an adequate number of groups.
+
+Once the split nodes have been defined, the user can then extract the
+group ID for each node using the function *merge.groups*. One can choose
+to refine these groups if needed, by setting a minimum number of nodes
+per group (*group_count_threshold*) or a minimum frequency of each group
+(*group_freq_threshold*).
+
+For an example, see the [SARS-CoV-2 code](#example-on-sars-cov-2) below.
+
+## Post-hoc analyses
+
+Two main post-hoc analyse can be done and are briefly described below.
+
+### Quantification of lineages’ fitness
+
+To quantify the fitness of each lineage, we developed a multinomial
+logistic model to fit the proportion of tips and nodes that belong to
+each lineage through time. This is done by using the function
+*estimate_rel_fitness_groups_with_branches*, which takes in entry:
+
+- the *dataset_with_nodes* dataframe, with a column ‘groups’ which gives
+  the group ID of each node in the dataset
+- the timed tree
+- *min_year*, the starting year at which to start fitting the model
+- the window size (*window*), or number of windows (*N*), to divide the
+  time series (from *min_year* to the last time point), compute
+  proportions and fit the model.
+
+For an example, see the [SARS-CoV-2 code](#example-on-sars-cov-2) below.
+
+### Lineage-defining mutations
+
+Use the function *association_scores_per_group* to compute the
+association score of each mutation to each group. The function takes in
+entry:
+
+- *dataset_with_nodes*
+- *dataset_with_inferred_reconstruction*: a dataframe with the same
+  first columns as *dataset_with_nodes* and then one column per snp its
+  ancestral reconstruction along all nodes
+- *tree*: timed tree
+- *possible_snps*: the list of mutations that need to be considered
+- *upstream_window*: for each group, how far upstream to consider
+  mutations
+- *downstream_window*: for each group, consider nodes from the MRCA up
+  to this time
+
+The codes to perform this analysis on the SARS-CoV-2 data is available
+in the file *2_4_Lineage_Defining_mutations.R*, in the folder
+`2_Functions`. As the SARS-CoV-2 genetic data is restricted, we cannot
+provide the raw data, but it is downloadable on GISAID.
 
 # Example on SARS-CoV-2
 
-## Load codes and data
+We provide here a working example on the SARS-CoV-2 timed phylogeny. You
+can go to specific sections of interest, however we recommend reading
+through all of this example.
+
+Sections of this example:
+
+- [Load codes and SARS-CoV-2 data](#load-codes-and-sars-cov-2-data)
+- [Compute the SARS-CoV-2 index
+  dynamics](#compute-the-sars-cov-2-index-dynamics)
+- [Find SARS-CoV-2 clades based on index
+  dynamics](#find-sars-cov-2-clades-based-on-index-dynamics-)
+- [Quantify the fitness of detected SARS-CoV-2
+  lineage](#quantify-the-fitness-of-detected-sars-cov-2-lineage)
+
+## Load codes and SARS-CoV-2 data
 
 #### Load index functions
 
 First, source all the necessary functions:
 
 ``` r
-source(file = '2_Functions/2_1_Index_computation_20231220.R')
-source(file = '2_Functions/2_2_Lineage_detection_20231220.R')
+source(file = '2_Functions/2_1_Index_computation_20240909.R')
+source(file = '2_Functions/2_2_Lineage_detection_20240909.R')
+source(file = '2_Functions/2_3_Lineage_fitness_20240909.R')
 ```
 
 Load necessary packages
@@ -36,14 +260,15 @@ Load necessary packages
 ``` r
 library(ape, quiet = T); library(phytools, quiet = T); library(stringr, quiet = T)
 library(MetBrewer, quiet = T); library(parallel, quiet = T); library(mgcv, quiet = T)
-library(cowplot, quiet = T); library(ggplot2, quiet = T); library(ggtree, quiet = T)
+library(cowplot, quiet = T); library(ggplot2, quiet = T); library(ggtree, quiet = T);
+library(cmdstanr, quiet = T); library(binom, quiet = T)
 ```
 
 Versions:
 
 Packages: ape v5.7-1, phytools v1.9-16, stringr v1.5.0, MetBrewer
 v0.2.0, parallel v4.1.2, mgcv v1.8-42, cowplot v1.1.1, ggplot2 v3.4.3,
-ggtree v3.2.1.
+ggtree v3.2.1, cmdstanr v0.5.2, binom v1.1
 
 R: 4.1.2
 
@@ -65,6 +290,8 @@ times_seqs = as.numeric(sapply(names_seqs, function(x)tail(str_split(x, pattern 
 clades_seqs = sapply(names_seqs, function(x)tail(str_split(x, pattern = '/')[[1]],1))
 ```
 
+## Compute the SARS-CoV-2 index dynamics
+
 #### Index parameters
 
 Set the index parameters.
@@ -80,8 +307,6 @@ timescale = 0.15 ## Timescale
 wind = 15 #days
 wind = wind/365
 ```
-
-## Compute the index dynamics
 
 #### Compute pairwise distance matrix
 
@@ -127,13 +352,13 @@ dataset_with_nodes$index = compute.index(time_distance_mat = genetic_distance_ma
                                          genome_length = genome_length)
 ```
 
-## Plot tree & index below, with colors from NextStrain clades
+#### Plot tree & index below, with colors from NextStrain clades
 
 First, generate the color key, based on the Nextstrain clade of each
 sequence.
 
 ``` r
-## Color key fro Nextstrain clades
+## Color key for Nextstrain clades
 colors_clade = met.brewer(name="Cross", n=length(levels(as.factor(dataset_with_nodes$Nextstrain_clade))), type="continuous")
 
 ## Color of each node, based on the key
@@ -179,9 +404,9 @@ legend('topright',
 
 ![](README_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->
 
-## Find clades based on index dynamics
+## Find SARS-CoV-2 clades based on index dynamics
 
-#### Run the lineage detection algorithm
+#### Run the lineage detection algorithm on SARS-CoV-2 data
 
 Parameters fro the detection:
 
@@ -240,6 +465,41 @@ Instead, you may wish to load the results:
 potential_splits = readRDS('README_files/potential_splits.rds')
 ```
 
+Look at the deviance explained by the models with different number of
+groups. Here for simplicity we directly chose max_groups_found = 13,
+which is the number of groups used in the original analysis. To decide
+on 13 groups, we initially ran the algorithm up to 30 groups.
+
+``` r
+df_explained_dev = data.frame('N_groups' = 0:length(potential_splits$best_dev_explained),
+                              'Non_explained_deviance' = (1-c(potential_splits$first_dev, potential_splits$best_dev_explained)),
+                              'Non_explained_deviance_log' = log(1-c(potential_splits$first_dev, potential_splits$best_dev_explained)))
+df_explained_dev$Non_explained_deviance_log = df_explained_dev$Non_explained_deviance_log-min(df_explained_dev$Non_explained_deviance_log)
+
+par(mfrow = c(1,2), oma = c(2,2,1,1), mar = c(2,2,2,0.5), mgp = c(0.75,0.25,0), cex.axis=0.5, cex.lab=0.5, cex.main=0.7, cex.sub=0.5)
+plot(df_explained_dev$N_groups,
+     df_explained_dev$Non_explained_deviance,
+     bty = 'n', ylim = c(0, ceiling(10*max(df_explained_dev$Non_explained_deviance))/10),
+     xaxt = 'n', yaxt = 'n', pch = 16, main = 'linear scale', cex = 0.5, 
+     ylab = 'Non-explained deviance (%)', xlab = 'Number of groups')
+axis(1, lwd = 0.5, tck=-0.02)
+axis(2, las = 2, at = seq(0,ceiling(10*max(df_explained_dev$Non_explained_deviance))/10,0.1),
+     labels = seq(0, ceiling(10*max(df_explained_dev$Non_explained_deviance))/10,0.1)*100, lwd = 0.5, tck=-0.02)
+
+plot(df_explained_dev$N_groups,
+     (df_explained_dev$Non_explained_deviance),
+     log = 'y',
+     ylim = c(0.01, 1),
+     bty = 'n',
+     xaxt = 'n', yaxt = 'n', pch = 16, main = 'log scale', cex = 0.5, 
+     ylab = 'Non-explained deviance (%) - log scale', xlab = 'Number of groups')
+axis(1, lwd = 0.5, tck=-0.02)
+axis(2, las = 2, at = c(0.01, 0.1, 0.25, 0.5, 1),
+     labels = c(0.01, 0.1, 0.25, 0.5, 1)*100, lwd = 0.5, tck=-0.02)
+```
+
+![](README_files/figure-gfm/unnamed-chunk-15-1.png)<!-- -->
+
 Optimize the number of groups: set the minimum number of sequences per
 group to 30, with a minimum frequency of 1%.
 
@@ -280,7 +540,7 @@ levels(dataset_with_nodes$group_color) = colors_groups
 dataset_with_nodes$group_color = as.character(dataset_with_nodes$group_color)
 ```
 
-## Plot tree & index below, with colors from index-defined groups
+#### Plot tree & index below, with colors from index-defined groups
 
 Plot the tree and index colored with the new groups:
 
@@ -301,8 +561,8 @@ plot(dataset_with_nodes$time,
      dataset_with_nodes$index, 
      col = adjustcolor(dataset_with_nodes$group_color, alpha.f = 1),
      bty = 'n', xlim = c(min_year, max_year), cex = 0.5,
-     pch = 16, bty = 'n', ylim = c(0, 1), 
-     main = paste0(''), 
+     pch = 16, bty = 'n', #ylim = c(0, 1), 
+     main = paste0(''), #log = 'y',
      ylab = 'Index', xlab = 'Time (years)', yaxt = 'n')
 axis(2, las = 2)
 # Color key
@@ -312,9 +572,9 @@ legend('topright',
        cex = 0.5, bty = 'n', ncol = 5)
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-17-1.png)<!-- -->
+![](README_files/figure-gfm/unnamed-chunk-18-1.png)<!-- -->
 
-## Compare NextStrain groups and groups called with the index
+#### Compare NextStrain groups and groups called with the index
 
 Generate SARS-CoV-2 trees colored with each set of groups next to each
 other:
@@ -358,4 +618,80 @@ plot_grid(plot_tree_sars_world_groups, plot_tree_sars_world_Nextstrain,
           rel_widths = c(1, 1), labels = c('Automatic clades', 'NextStrain clades'), label_size = 10, label_x = c(0.1, 0.25), ncol = 2)
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-19-1.png)<!-- -->
+![](README_files/figure-gfm/unnamed-chunk-20-1.png)<!-- -->
+
+## Quantify the fitness of detected SARS-CoV-2 lineage
+
+#### Run the fitness model
+
+Quantify the fitness of each group you can run the code (this steps
+takes approximately \<5 min on 3 cores):
+
+``` r
+start_time = Sys.time()
+## Load and compile stan code (this can take a few minutes)
+model_compiled <- cmdstan_model(stan_file = '2_Functions/Model_multinomial_logistic_birthdeath_lineage_fitness_20231220.stan')
+## Run model on SARS-CoV-2 groups
+res_fitness = estimate_rel_fitness_groups_with_branches(dataset_with_nodes = dataset_with_nodes,
+                                                        tree = tree_sars_cov2,
+                                                        min_year = 2020, 
+                                                        window = 30/365,
+                                                        model_compiled = model_compiled,
+                                                        iter_warmup = 250, iter_sampling = 500, refresh = 50, seed = 1)
+end_time = Sys.time()
+print(end_time - start_time)
+```
+
+You might encounter a warning saying that ‘*alpha_true_GA*’ has a
+missing init value - this is normal as those groups (ancestral groups
+that are not present at the start of the time series) do not always
+exist and therefore there is no default initial value. This is does not
+impact the model run. The seed has been set to 1 so allow for
+reproducible results.
+
+To save some time, you may wish to load the results:
+
+``` r
+res_fitness = readRDS('README_files/res_fitness.rds')
+```
+
+#### Plot the fits and estimated parameters
+
+Plot the fits:
+
+``` r
+order_colors = order(as.numeric(split$tip_and_nodes_groups))
+colour_lineage = colors_groups[match(split$tip_and_nodes_groups[order_colors], name_groups)]
+
+plot_fit_data_new(data = res_fitness$data,
+                  Chains = res_fitness$chains,
+                  colour_lineage = colour_lineage,
+                  xmin = 2020, xmax = 2023.5)
+```
+
+    ## Registered S3 method overwritten by 'DescTools':
+    ##   method        from     
+    ##   print.palette MetBrewer
+
+![](README_files/figure-gfm/unnamed-chunk-23-1.png)<!-- -->
+
+Plot the predicted vs observed proportions:
+
+``` r
+plot_observed_vs_predicted(data = res_fitness$data,
+                           Chains = res_fitness$chains,
+                           colour_lineage = colour_lineage)
+```
+
+![](README_files/figure-gfm/unnamed-chunk-24-1.png)<!-- -->
+
+Plot raw fitness estimates:
+
+``` r
+plot_estimated_fitness_ref_ancestral(data = res_fitness$data,
+                                     Chains = res_fitness$chains,
+                                     colour_lineage = colour_lineage, 
+                                     gentime = 1)
+```
+
+![](README_files/figure-gfm/unnamed-chunk-25-1.png)<!-- -->

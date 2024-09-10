@@ -278,7 +278,7 @@ data{
 parameters {
   // Proportions
   simplex[G] alpha_true;   // Starting proportion of ancestral groups 
-  vector<lower=0, upper = 1> [GA] alpha_true_GA; // Starting proportion of each new group (not ancestral)
+  vector<lower=0, upper = 1> [GA] alpha_true_GA; // Starting proportion of each new group (ancestral groups that appear after start)
   vector<lower=0, upper = 1> [K-G-GA] gamma_true; // Starting proportion of each new group (not ancestral)
     
   // Fitness
@@ -286,7 +286,7 @@ parameters {
 }
 
 transformed parameters { 
-  // Get alpha fro each group
+  // Get alpha for each group
   vector[K] alpha=rep_vector(0, K);
   alpha=get_alpha(alpha_true, parents, K, G, t_start, t);
    
