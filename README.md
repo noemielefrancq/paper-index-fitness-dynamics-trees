@@ -126,7 +126,7 @@ results to existing sequence classifications. The index of each node
 ## Lineage detection
 
 To run the lineage detection algorithm, use the function
-*find.groups.by.index.dynamics.3.0*, you will need differents inputs:
+*find.groups.by.index.dynamics*, you will need different inputs:
 
 1.  Data: *timed_tree* and *metadata* (*dataset_with_nodes*)
 2.  Lineage detection parameters:
