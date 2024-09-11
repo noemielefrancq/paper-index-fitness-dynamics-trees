@@ -65,7 +65,7 @@ To compute the index of all nodes, use the function *compute.index*, you will ne
     * The timescale: *timescale* (in years), this will be used to compute the bandwidth, see more details below.
     * Window of time on which to search for samples in the population: *wind*, see more details below.
 
-The function outputs the index of each node (internal and terrminal).
+The function outputs a vector containing the index of each node (internal and terminal).
 
 
 More details on the input of the function:

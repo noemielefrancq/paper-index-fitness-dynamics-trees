@@ -82,7 +82,8 @@ will need different inputs:
     - Window of time on which to search for samples in the population:
       *wind*, see more details below.
 
-The function outputs the index of each node (internal and terrminal).
+The function outputs a vector containing the index of each node
+(internal and terminal).
 
 More details on the input of the function:
 
