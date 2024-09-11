@@ -28,7 +28,7 @@ In this repo you will find:
 composition in phylogenetic trees of pathogens, allowing for the
 automatic detection of lineages based on shared fitness and evolutionary
 relationships. It is currently written in R, with the exception of the
-fitness model which is written in Stan. On principle, *phylowave* is
+fitness model which is written in Stan. In principle, *phylowave* is
 applicable to any pathogen (*e.g.* from viruses and bacteria) provided a
 timed-phylogeny is available and the sampling is representative of the
 diversity.
@@ -49,24 +49,62 @@ detailed in the following sections:
 
 The minimal inputs to use the pipeline are:
 
-- a time-resolved phylogenetic tree, which must be *binary* and of class
-  *phylo*
-- the sampling times of all tips
+- a **time-resolved phylogenetic tree**. The tree must be of class
+  *phylo* and *binary*. The functions *ape::read.tree* and
+  *ape::read.nexus* will enable you to load most trees (of newick or
+  nexus formats, respectively) as objects of class *phylo*. You can test
+  if you tree is binary with the function *ape::is.binary*. If it isn’t
+  binary you can always use the function *ape::multi2di* to resolve the
+  polytomies artificially.
+- the **sampling times of all tips**. This must be a vector of numerical
+  values, of the same length as the number of tips.
 
 ## Index computation
 
-To compute the index of all nodes, one needs:
+To compute the index of all nodes, use the function *compute.index*, you
+will need different inputs:
 
-- The genome length of the pathogen considered: *genome_length* (in bp).
-- The mutation rate of the pathogen considered: *mutation_rate* (in
-  bp/genome/year), an average is fine.
-- The timescale: *timescale* (in years), this will be used to compute
-  the bandwidth, see more details below.
-- Window of time on which to search for samples in the population:
-  *wind*, see more details below.
+1.  Data:
+    - the *timed_tree*
+    - *metadata* dataframe (see below the details of the
+      *dataset_with_nodes*)
+    - *distance matrix*: can be computed from the timed tree with the
+      function *dist.nodes.with.names*
+2.  Information on the pathogen genome (these are pathogen specific):
+    - The genome length of the pathogen considered: *genome_length* (in
+      bp).
+    - The mutation rate of the pathogen considered: *mutation_rate* (in
+      bp/genome/year), an average is fine.
+3.  Index parameters (these are both pathogen-specific and
+    dataset-specific):
+    - The timescale: *timescale* (in years), this will be used to
+      compute the bandwidth, see more details below.
+    - Window of time on which to search for samples in the population:
+      *wind*, see more details below.
 
-While *genome_length* and *mutation_rate* are pathogen-specific, the
-*timescale* and *wind* are both pathogen-specific and dataset-specific.
+The function outputs the index of each node (internal and terrminal).
+
+More details on the input of the function:
+
+**dataset_with_nodes**: To store the data throughout the analysis, we
+use a main *metadata* dataframe called *dataset_with_nodes* which looks
+like this:
+
+| ID     | name_seq  |       time | is.node | Known clade classification | Index |
+|--------|:---------:|-----------:|--------:|---------------------------:|------:|
+| $1$    | $name\_1$ |      $t_1$ |    ‘no’ |                            |       |
+| $2$    | $name\_2$ |      $t_2$ |    ‘no’ |                            |       |
+| $3$    | $name\_3$ |      $t_3$ |    ‘no’ |                            |       |
+| …      |     …     |          … |       … |                            |       |
+| $n$    | $name\_n$ |      $t_n$ |    ‘no’ |                            |       |
+| $n +1$ |  $n + 1$  |  $t_{n+1}$ |   ‘yes’ |                            |       |
+| …      |     …     |          … |       … |                            |       |
+| $2n-1$ |  $2n-1$   | $t_{2n-1}$ |   ‘yes’ |                            |       |
+
+Where $n$ is the number of tips (terminal nodes) in the tree. The column
+‘Known clade classification’ is optional, but is useful to compare the
+results to existing sequence classifications. The index of each node
+(internal and terrminal) is stored in the column ‘Index’.
 
 **timescale**: The timescale determines the kernel which enables to
 track lineage emergence dynamically, focusing on short distances between
@@ -90,45 +128,30 @@ visualisation of population dynamics. We recommend trying different
 values.
 
 **wind**: The choice of *wind* will depend on the sampling intensity of
-the dataset. As a mean of example, for SARS-CoV-2, we set *wind* to 15
+the dataset. It defines the window of time around each node on which to
+search for samples in the population. Ultimately it smooths the index
+dynamics. As a mean of example, for SARS-CoV-2, we set *wind* to 15
 days, as the dataset was intensely sampled. But for *Bordetella
 pertussis*, which is more sparsely sampled, we chose a *wind* of 1 year.
 If *wind* is too large, then all the nodes are considered to be part of
 the same time window. If *wind* is too small, then only the nodes in
 direct proximity of the node of interest will be considered in the time
-window, which can result in noisy index dynamics.
+window, which can result in noisy index dynamics. We recommend choosing
+a *wind* value that enables to span multiple sampling times, for example
+if you have samples and nodes every week, you may choose a *wind* of
+~1-2 months. If you have samples and nodes every year, you may choose a
+*wind* of ~2 years.
 
-The function *compute.index* will take those parameters in input, as
-well as the tree, the distance matrice and the metadata dataframe. The
-function will compute the index of all nodes (internal and terminal).
 See [the example](#example-on-sars-cov-2) for more details.
-
-To store the data throughout the analysis, we use a main dataset called
-*dataset_with_nodes* which looks like this:
-
-| ID     | name_seq  |       time | is.node | Known clade classification | Index |
-|--------|:---------:|-----------:|--------:|---------------------------:|------:|
-| $1$    | $name\_1$ |      $t_1$ |    ‘no’ |                            |       |
-| $2$    | $name\_2$ |      $t_2$ |    ‘no’ |                            |       |
-| $3$    | $name\_3$ |      $t_3$ |    ‘no’ |                            |       |
-| …      |     …     |          … |       … |                            |       |
-| $n$    | $name\_n$ |      $t_n$ |    ‘no’ |                            |       |
-| $n +1$ |  $n + 1$  |  $t_{n+1}$ |   ‘yes’ |                            |       |
-| …      |     …     |          … |       … |                            |       |
-| $2n-1$ |  $2n-1$   | $t_{2n-1}$ |   ‘yes’ |                            |       |
-
-Where $n$ is the number of tips (terminal nodes) in the tree. The column
-‘Known clade classification’ is optional, but is useful to compare the
-results to existing sequence classifications. The index of each node
-(internal and terrminal) is stored in the column ‘Index’. See code in
-[the example](#example-on-sars-cov-2).
 
 ## Lineage detection
 
 To run the lineage detection algorithm, use the function
 *find.groups.by.index.dynamics*, you will need different inputs:
 
-1.  Data: *timed_tree* and *metadata* (*dataset_with_nodes*)
+1.  Data: *timed_tree* (must be the same as the one used in
+    compute.index) and *metadata* (*dataset_with_nodes*, with the index
+    values of each node)
 2.  Lineage detection parameters:
     - *min_descendants_per_tested_node*: to start the analysis, start
       from nodes that have this minimum number of sequences
@@ -147,8 +170,8 @@ To run the lineage detection algorithm, use the function
 3.  Technical parameters: they do not necessarily need to be updated
     (see the function documentation for details): *p_value_smooth*,
     *stepwise_deviance_explained_threshold*, *stepwise_AIC_threshold*,
-    *k_smooth*, *parallelize_code*, *number_cores*, *plot_screening* and
-    *keep_track*.
+    *k_smooth*, *parallelize_code*, *number_cores*, *plot_screening*,
+    *keep_track* and *log_y*.
 
 The function outputs multiple elements in a list:
 
@@ -408,7 +431,7 @@ legend('topright',
 
 #### Run the lineage detection algorithm on SARS-CoV-2 data
 
-Parameters fro the detection:
+Parameters for the detection:
 
 ``` r
 time_window_initial = 2030;
