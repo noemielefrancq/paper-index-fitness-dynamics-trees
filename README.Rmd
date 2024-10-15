@@ -10,8 +10,11 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+<center>
 
-Last update: 10 September 2024
+![](README_files/Logo_small.png)<!-- -->
+
+</center>
 
 # Content of this repo
 
@@ -24,7 +27,7 @@ In this repo you will find:
     * lineage fitness estimation
     * lineage-defining mutations 
     
-# Content of this README
+# Content of this README 
  
 1. [General guidance](#general-guidance) on how to use *phylowave* on your data 
 2. [An example](#example-on-sars-cov-2) of lineage detection on a SARS-CoV-2 phylogeny
@@ -67,7 +70,6 @@ To compute the index of all nodes, use the function *compute.index*, you will ne
 
 The function outputs a vector containing the index of each node (internal and terminal).
 
-
 More details on the input of the function:
 
 **dataset_with_nodes**: To store the data throughout the analysis, we use a main *metadata* dataframe called *dataset_with_nodes* which looks like this: 
@@ -83,7 +85,7 @@ More details on the input of the function:
 | ...       | ...        | ...       | ...      |                            |       |
 | $2n-1$    | $2n-1$     | $t_{2n-1}$| 'yes'    |                            |       |  
        
-Where $n$ is the number of tips (terminal nodes) in the tree. The column 'Known clade classification' is optional, but is useful to compare the results to existing sequence classifications. The index of each node (internal and terrminal) is stored in the column 'Index'.
+Where $n$ is the number of tips (terminal nodes) in the tree. The column 'Known clade classification' is optional, but is useful to compare the results to existing sequence classifications. The index of each node (internal and terminal) is stored in the column 'Index'.
 
 **timescale**: The timescale determines the kernel which enables to track lineage emergence dynamically, focusing on short distances between nodes (containing information about recent population dynamics) rather than long distances (containing information about past evolution). The timescale is tailored to the specific pathogen studied and its choice depends on the molecular signal, as well as the transmission rate. In the study, we used timescales ranging from months (typical of RNA viruses) to years (typical of bacteria). To determine a timescale suitable for your dataset, we recommend thinking about the generation time of the pathogen considered, its mutation rate, and the amount of diversity already accumulated. For example, at the time of the analysis, SARS-CoV-2 was a new pathogen, spreading quickly and accumulating diversity at a rate of ~2 mutations per month. Therefore, a small timescale of less than a year chosen (0.15 years). On the contrary, *Mycobacterium tuberculosis* is an older and relatively slowly spreading pathogen, which accumulates mutations at a rate of ~0.2 mutation per year. A much larger timescale was then chosen (30 years), to reflect this. Ultimately, the best timescale is one that maximises the visualisation of population dynamics. We recommend trying different values.
 
@@ -170,7 +172,7 @@ Sections of this example:
 
 ```{r, echo = F, eval=T}
 ## Not printed, set directory
-setwd('~/Documents/THD/Index_paper_methods_Sc2_H3N2_BP_TB/paper-index-fitness-dynamics-trees/')
+setwd('~/Dropbox/THD/Index_paper_methods_Sc2_H3N2_BP_TB/paper-index-fitness-dynamics-trees/')
 ```
 
 First, source all the necessary functions:

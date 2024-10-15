@@ -2,7 +2,11 @@ Code for the paper ‘Learning the fitness dynamics of pathogens from
 phylogenies’
 ================
 
-Last update: 10 September 2024
+<center>
+
+![](README_files/Logo_small.png)<!-- -->
+
+</center>
 
 # Content of this repo
 
@@ -105,7 +109,7 @@ like this:
 Where $n$ is the number of tips (terminal nodes) in the tree. The column
 ‘Known clade classification’ is optional, but is useful to compare the
 results to existing sequence classifications. The index of each node
-(internal and terrminal) is stored in the column ‘Index’.
+(internal and terminal) is stored in the column ‘Index’.
 
 **timescale**: The timescale determines the kernel which enables to
 track lineage emergence dynamically, focusing on short distances between

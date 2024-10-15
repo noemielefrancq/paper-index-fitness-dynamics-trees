@@ -129,8 +129,9 @@ plot_fit_data = function(data, Chains, colour_lineage){
   }
 }
 plot_fit_data_new = function(data, Chains, colour_lineage, xmin, xmax){
-  plot(NULL, bty = 'n', ylim = c(0,1), xlim = c(xmin, xmax), 
+  plot(NULL, bty = 'n', ylim = c(0,1), xlim = c(xmin, xmax), yaxt = 'n',
        col = colour_lineage[1], xlab = 'Time (years)', ylab = 'Proportion')
+  axis(2, las = 2)
   pred_freq_chains = array(NA, dim = c(length(Chains$lp__), data$K, data$N_new))
   for(i in 1:data$N_new){
     pred_freq_chains[,,i] = t(apply(Chains$theta_new[,,i], MAR = 1, softmax))
